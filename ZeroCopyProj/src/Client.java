@@ -1,0 +1,103 @@
+
+import java.io.*;
+import java.nio.channels.*;
+import java.net.*;
+import java.util.Scanner;
+
+public class Client {
+
+    private Socket clientSocket;
+    private SocketChannel clientChannel;
+    private DataInputStream din;
+    private DataOutputStream dout;
+    private final String IP = "172.20.10.8"; //ip standart vm
+    private final int PORT_SERVER = 8040;
+    private final int PORT_SOCKET = 4070;
+    private final String folder = "C:/Users/api_q/OneDrive/เดสก์ท็อป/ZeroCopyProj/client";
+    private String[] file;
+
+    public static void main(String[] args) {
+        Client client = new Client();
+        client.connectionToServer();
+    }
+
+    private void connectionToServer() {
+        try {
+            clientSocket = new Socket(IP, PORT_SERVER);
+            clientChannel = SocketChannel.open(new InetSocketAddress(IP, PORT_SOCKET));
+            din = new DataInputStream(clientSocket.getInputStream());
+            dout = new DataOutputStream(clientSocket.getOutputStream());
+            Scanner sc = new Scanner(System.in);
+
+            int listFile = din.readInt();
+            file = new String[listFile];
+            System.out.println("-----------------------File------------------------");
+            for (int i = 0; i < listFile; i++) {
+                file[i] = din.readUTF();
+                System.out.println("(" + (i + 1) + ")" + file[i]);
+            }
+            System.out.println("---------------------------------------------------");
+            System.out.println("Which file do you want to download?");
+            System.out.print("Press your number : ");
+            int select = sc.nextInt();
+            dout.writeInt(select);
+            System.out.println("Which solution do you want to download?");
+            System.out.println("(1)" + " Copy");
+            System.out.println("(2)" + " ZeroCopy");
+            System.out.print("Press your number : ");
+            int solution = sc.nextInt();
+            dout.writeInt(solution);
+            String path = folder + "/" + file[select - 1];
+            long size = din.readLong();
+            if (solution == 1) {
+                int start = (int) System.currentTimeMillis();
+                System.out.println("Receiv...");
+                copy(path, size);
+                int end = (int) System.currentTimeMillis();
+                System.out.println("Finish time : " + (end - start) + " Milliseconde");
+            } else {
+                int start = (int) System.currentTimeMillis();
+                System.out.println("Receiv...");
+                zeroCopy(path, size);
+                int end = (int) System.currentTimeMillis();
+                System.out.println("Finish time : " + (end - start) + " Milliseconde");
+            }
+
+        } catch (IOException e) {
+
+        }
+    }
+
+    private void copy(String pathFile, long sizeFile) {
+        try {
+            BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(pathFile)); //ข้อมูลไบต์แปลงเป็น buffer อีกที
+            byte[] buffer = new byte[1024];
+            long currentRead = 0;
+            while (currentRead < sizeFile) {
+                int read = din.read(buffer);
+                currentRead += read;
+                bos.write(buffer, 0, read);
+                System.out.println("Receiving : "+read);
+            }
+            bos.close(); //คืนสิทธิการครอบครองไฟล์
+        } catch (IOException e) {
+
+        }
+    }
+
+    private void zeroCopy(String pathFile, long sizeFile) {
+        try {
+            FileChannel fileChannel = new FileOutputStream(pathFile).getChannel();
+            int currentRead = 0;
+            while (currentRead < sizeFile) {
+                long read = fileChannel.transferFrom(clientChannel, currentRead, sizeFile - currentRead);
+                currentRead += read;
+                System.out.println("Receiving : "+read);
+            }
+            fileChannel.close();
+        } catch (IOException e) {
+
+        }
+    }
+
+}
